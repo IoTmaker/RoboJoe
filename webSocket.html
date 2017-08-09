@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<head>
+<script>
+  var connection = new WebSocket('ws://192.168.1.8:81/', ['arduino']);
+
+  connection.onopen = function () {
+    connection.send('Message from Browser to ESP8266, I\'M CONNECTED TO YOU!! ');
+  };
+
+  connection.onerror = function (error) {
+    console.log('WebSocket Error ', error);
+  };
+
+  connection.onmessage = function (e) {
+    console.log('Server: ', e.data);
+    // TODO insert logic here to get the values and state from server then update the UI.
+  };
+
+  function sendOnOff() {
+    var on = document.getElementById('on').checked;
+    console.log("on: " + on)
+    var state = on == true ? "on": "off";
+    console.log('STATE: ' + state);
+    connection.send(state);
+    if(state == "on"){
+      document.getElementById("on").checked = true;
+      document.getElementById("off").checked = false;
+    }
+  }
+</script>
+</head>
+<body>
+
+  <input id="on" type="radio" name="toggle"  onchange="sendOnOff();" autofocus> on <br>
+  <input id="off" type="radio" name="toggle" onchange="sendOnOff();" checked> off <br>
+
+</body>
+</html>
