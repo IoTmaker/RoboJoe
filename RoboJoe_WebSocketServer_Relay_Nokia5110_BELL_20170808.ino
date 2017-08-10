@@ -45,6 +45,8 @@
 #define LCD_X     84
 #define LCD_Y     48
 
+#define RELAY             13  // any PWM pin
+
 ESP8266WiFiMulti WiFiMulti;
 
 // establish websocket port 81
@@ -257,29 +259,48 @@ void LCDInit(void) {
 /*END LCD COMMANDS**********************************************************************************************/
 /***************************************************************************************************************/
 
+boolean isRelayOn = false; // initialize global variable to hold state of the relay.
+
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght) {
   switch(type) {
     case WStype_DISCONNECTED:
       USE_SERIAL.printf("[%u] Disconnected!\n", num);
       break;
-    case WStype_CONNECTED:
-      {
-        IPAddress ip = webSocket.remoteIP(num);
-        USE_SERIAL.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-		
-		// send message to client
-		webSocket.sendTXT(num, "Connected");
+    case WStype_CONNECTED:{
+      IPAddress ip = webSocket.remoteIP(num);
+      USE_SERIAL.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+	    // send message to client
+	    webSocket.sendTXT(num, "Connected");
       }
       break;
-    case WStype_TEXT:
+    case WStype_TEXT:{
+      // convert payload which is of type types uint8_t* (aka unsigned char*) to string
+      String payload_str = String((char*) payload);
+      // send auto reply to all connected clients
+      webSocket.broadcastTXT("Confirming receipt of payload = " + payload_str);
       USE_SERIAL.printf("[%u] get Text: %s\n", num, payload);
+      if(payload_str == "on"){
+        //complete circuit
+        isRelayOn = true;
+        digitalWrite(RELAY, isRelayOn == true ? LOW : HIGH);
+        LCDClear();
+        gotoXY(1, 2);
+        LCDString("on");
+      }
+      if(payload_str == "off"){
+        //break circuit
+        isRelayOn = false;
+        digitalWrite(RELAY, isRelayOn == true ? LOW : HIGH);
+        LCDClear();
+        gotoXY(1, 2);
+        LCDString("off");
+      }
 
-      // send message to client
-      webSocket.sendTXT(num, "Hi From the Server!");
-
-      // send data to all connected clients
-      webSocket.broadcastTXT("Hi, Broadcast from Server!");
+      isRelayOn == true ? USE_SERIAL.print("isRelayOn = true\n") :  USE_SERIAL.print("isRelayOn = false\n");
+      // send message to the single client that made the incoming request
+      // webSocket.sendTXT(num, "Hi From the Server!");
       break;
+    }
     case WStype_BIN:
       USE_SERIAL.printf("[%u] get binary lenght: %u\n", num, lenght);
       hexdump(payload, lenght);
@@ -292,7 +313,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
 
 // converts IPAddress into a chararray so that IP can be 
 // printed to the LCD so that users can connect to via
-// the web browser
+// the web browser. references http://www.esp8266.com/viewtopic.php?p=25466
 char *ipToCharArray(IPAddress ip){
   static char szRet[16];
   String s="";
@@ -305,6 +326,9 @@ char *ipToCharArray(IPAddress ip){
 void setup() {
   USE_SERIAL.begin(115200);
   USE_SERIAL.setDebugOutput(true);
+
+  pinMode(13, OUTPUT); // setup pin 13 as output to relay
+  digitalWrite(RELAY, HIGH);
 
   LCDInit(); //Init the LCD
   LCDClear();
@@ -356,21 +380,15 @@ void setup() {
 }
 
 void loop() {
-    webSocket.loop();
+  webSocket.loop();
 }
 
-/* TODO from ESP8266_dig2on-offAdafruitIO.ino
+/* TODO 
 
-#define LED             2  // any PWM pin
+use button to turn on off manually
+use analog input pin A to get the fill level with capacitance sensor
+make graphics to show on off, brewing and fill level, temp
+get and use thermistor for temperature sensing
 
-setup(){
-  // initialize digital pin 2 as an output.
-  pinMode(2, OUTPUT);
-}
-
-void loop() {
-   // write the current state to the power switch tail
-      digitalWrite(LED, current == 1 ? HIGH : LOW);
-}
 
 */
